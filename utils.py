@@ -66,3 +66,29 @@ def create_view(conn: duckdb.connect, view_name: str = 'events_unnested') -> Non
     from events
     """)
     print(f"View {view_name} created successfully")
+
+def two_b_1(conn: duckdb.connect):
+   print(conn.execute(
+   """
+    SELECT t2.product ,SUM(t1.int_value) as revenue, COUNT(t2.session_id)
+    as purchases, week(epoch_ms(t1.event_timestamp)) as week from events_unnested as t1 join(
+        SELECT session_id, string_value as product
+        FROM events_unnested 
+        WHERE key = 'product') as t2
+    ON t1.session_id = t2.session_id
+    WHERE t1.key = 'amount'
+    GROUP BY t2.product, week
+    """).fetch_df())
+
+def two_b_2(conn: duckdb.connect):
+    print(conn.execute("""
+    SELECT string_value, count(distinct user_pseudo_id) as users,
+        week(epoch_ms(event_timestamp)) as week 
+    from events_unnested
+    WHERE key = 'step'
+    GROUP BY string_value, week
+    """).fetch_df())
+
+
+
+
