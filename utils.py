@@ -11,14 +11,14 @@ def download_data(url: str = "https://sde-test-data-sltezl542q-ew.a.run.app/") -
         url (str, optional): URL to the data. Defaults to "https://sde-test-data-sltezl542q-ew.a.run.app/".
     """
     response = requests.get(url, stream=True)
-    with open("data/file.parquet", "wb") as f:
+    with open("/data/file.parquet", "wb") as f:
         f.write(response.content)
     print("Data downloaded successfully")
 
 
 def create_table(
     conn: duckdb.connect, table_name: str = "events",
-        path: str = "data/file.parquet") -> None:
+        path: str = "/data/file.parquet") -> None:
     """
     This function creates the table from the parquet file.
     The table is called events by default and has the following columns:
