@@ -1,0 +1,6 @@
+duckdb==0.7.1
+pandas
+requests
+fastapi
+uvicorn[standard]
+pytest
