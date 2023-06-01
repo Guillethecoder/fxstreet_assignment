@@ -1,17 +1,18 @@
 import requests
 import duckdb
 import pandas as pd
+import os
 
-
-def download_data(url: str = "https://sde-test-data-sltezl542q-ew.a.run.app/") -> None:
+def download_data(url: str = "https://sde-test-data-sltezl542q-ew.a.run.app/", path: str = "/data/file.parquet") -> None:
     """
     This function downloads the data from the url and saves it to data/file.parquet
 
     Args:
         url (str, optional): URL to the data. Defaults to "https://sde-test-data-sltezl542q-ew.a.run.app/".
+        path (str, optional): Path to save the data. Defaults to "/data/file.parquet".
     """
     response = requests.get(url, stream=True)
-    with open("/data/file.parquet", "wb") as f:
+    with open(path, "wb") as f:
         f.write(response.content)
     print("Data downloaded successfully")
 
@@ -45,6 +46,21 @@ def create_table(
         FROM read_parquet('{path}')
     """)
     print(f"Table {table_name} created successfully")
+
+def test_download_data():
+    """
+    This function tests if the data has been downloaded successfully.
+    """
+    download_data(path = "./data/file.parquet")
+    assert os.path.exists("./data/file.parquet")
+
+def test_create_table():
+    """
+    This function tests if the table events has been created successfully.
+    """
+    conn = duckdb.connect(database='./data/data.db', read_only=False)
+    create_table(conn, path = "./data/file.parquet")
+    assert conn.execute("""SELECT * FROM events LIMIT 1""").fetch_df().shape[0] == 1
 
 
 def create_view(conn: duckdb.connect, view_name: str = 'events_unnested') -> None:
