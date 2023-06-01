@@ -170,3 +170,11 @@ pd.concat(
 
 # Note: I've also done the queries to get the answers with the view events_unnested. They are in the file utils.py
 # The ones with the legacy prefix are the ones that use the view.
+
+# Data quality checks I would perform:
+# - Check if the data is complete. For example, check if there are any null values in the columns that should not have null values.
+# - Check if the data is correct. For example, check if the values in the columns are of the correct type.
+# - Check if the data is consistent. For example, check if the values in the columns are in the correct range. For example no negative ammonut spent.
+# - Check if the data is unique. For example, check if there are any rows that have the same session id.
+# - Check if there is any incongruent data, for instance if there is a row with a purchase but no product.
+# - Check if the order of the steps in the funnel is correct. For example, check if there are any rows where the user has gone from the checkout step to the landing step.
