@@ -1,8 +1,7 @@
-from utils import download_data, create_table, create_view, two_b_1, two_b_2, two_b_3
+from utils import *
 import duckdb
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import pandas as pd
 
 PERSISTENT_STORAGE_PATH = "/data/data.db"
 
@@ -11,9 +10,10 @@ def main():
     conn = duckdb.connect(database=PERSISTENT_STORAGE_PATH, read_only=False)
     create_table(conn)
     create_view(conn)
-    two_b_1(conn)
-    two_b_2(conn)
-    df = two_b_3(conn)
+    create_my_table(conn)
+    calculate_purchases_and_revenue_per_product_week(conn)
+    calculate_number_of_users_per_step_per_week(conn)
+    df = calculate_conversion_rate_per_step_per_week(conn)
     conn.close()
     return df.to_json(orient='records')
 

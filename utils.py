@@ -68,8 +68,10 @@ def create_view(conn: duckdb.connect, view_name: str = 'events_unnested') -> Non
     """)
     print(f"View {view_name} created successfully")
 
-def two_b_1(conn: duckdb.connect) -> pd.DataFrame:
+
+def legacy_two_b_1(conn: duckdb.connect) -> pd.DataFrame:
     """
+    This function performs calculation directly from the events_unnested view.
     This function calculates the revenue for each product and week.
     The revenue is calculated as the sum of the amount for each product and week.
 
@@ -92,8 +94,9 @@ def two_b_1(conn: duckdb.connect) -> pd.DataFrame:
     GROUP BY t2.product, week
     """).fetch_df()
 
-def two_b_2(conn: duckdb.connect):
+def legacy_two_b_2(conn: duckdb.connect):
     print(conn.execute("""
+    This function performs calculation directly from the events_unnested view.
     SELECT string_value, count(distinct user_pseudo_id) as users,
         week(epoch_ms(event_timestamp)) as week 
     from events_unnested
@@ -102,8 +105,9 @@ def two_b_2(conn: duckdb.connect):
     """).fetch_df())
 
 
-def two_b_3_select_one(conn: duckdb.connect, step: str = 'landing') -> pd.DataFrame:
+def legacy_two_b_3_select_one(conn: duckdb.connect, step: str = 'landing') -> pd.DataFrame:
     """
+    This function performs calculation directly from the events_unnested view.
     This function calculates the conversion rate for a given step in the funnel.
     The conversion rate is calculated as the number of users who completed the step divided by the number of users who started the step.
     
@@ -132,8 +136,9 @@ def two_b_3_select_one(conn: duckdb.connect, step: str = 'landing') -> pd.DataFr
         FROM t1;
     """).fetch_df()
     
-def two_b_3(conn: duckdb.connect) -> pd.DataFrame:
+def legacy_two_b_3(conn: duckdb.connect) -> pd.DataFrame:
     """
+    This function performs calculation directly from the events_unnested view.
     This function calculates the conversion rate for each step in the funnel.
     The conversion rate is calculated as the number of users who completed the step divided by the number of users who started the step.
     Args:
@@ -167,3 +172,129 @@ def two_b_3(conn: duckdb.connect) -> pd.DataFrame:
 
 
 
+def create_my_table(conn: duckdb.connect) -> None:
+    """
+    This function creates the table that I propose to use to answer the queries in the
+    assignment. The table is called my_table and has the following columns:
+    session_id, user_pseudo_id, week, year, steps, product, amount, currency
+    To find a more detailed description of the table, please refer to the notebook.py file.
+    """
+    conn.execute("""
+    CREATE OR REPLACE TABLE my_table AS (
+        SELECT DISTINCT ON(session_id) session_id, user_pseudo_id, week(epoch_ms(event_timestamp)) as week,
+        year(epoch_ms(event_timestamp)) as year,
+        list(string_value) FILTER (WHERE key = 'step') over w1 as steps,
+        string_agg(string_value, '') FILTER (WHERE key = 'product') over w1 as product,
+        sum(int_value) FILTER (WHERE key = 'amount') over w1 as amount,
+        string_agg(string_value, '') FILTER (WHERE key = 'currency') over w1 as currency,
+            from events_unnested
+            window w1 as (
+            PARTITION BY session_id, year(epoch_ms(event_timestamp)), week(epoch_ms(event_timestamp))
+        )
+    )"""
+    )
+    print("Table my_table created successfully")
+
+
+def calculate_purchases_and_revenue_per_product_week(conn: duckdb.connect) -> pd.DataFrame():
+    """
+    This function calculates the purchases and revenue for each week.
+    The purchases are calculated as the number of sessions that have a purchase.
+    The revenue is calculated as the sum of the amount for each session.
+
+    Args:
+        conn (duckdb.connect): Connection to the database
+    
+    Returns:
+        pd.DataFrame: Dataframe with the purchases and revenue for each week
+    """
+    return conn.execute("""
+    SELECT
+        product,
+        week,
+        count(*) as purchases,
+        sum(amount) as revenue
+    FROM my_table
+    WHERE product IS NOT NULL
+    GROUP BY product, week
+    ORDER BY week, product
+    """).fetch_df()
+
+def calculate_number_of_users_per_step_per_week(conn: duckdb.connect) -> pd.DataFrame:
+    """
+    This function calculates the number of users for each step and week.
+    The number of users is calculated as the number of distinct user_pseudo_id for each step and week.
+    
+    Args:
+        conn (duckdb.connect): Connection to the database
+    
+    Returns:
+        pd.DataFrame: Dataframe with the number of users for each step and week
+    """
+    return conn.execute("""
+    SELECT
+        DISTINCT ON (week)
+        count(*) FILTER (WHERE list_contains(steps, 'landing')) over (PARTITION BY year, week)  as landing,
+        count(*) FILTER (WHERE list_contains(steps, 'checkout')) over (PARTITION BY year, week)  as checkout,
+        count(*) FILTER (WHERE list_contains(steps, 'login-options')) over (PARTITION BY year, week)  as login_options,
+        count(*) FILTER (WHERE list_contains(steps, 'sign-up')) over (PARTITION BY year, week)  as sign_up,
+        count(*) FILTER (WHERE list_contains(steps, 'purchase')) over (PARTITION BY year, week)  as purchase,
+        year, week
+        FROM my_table
+    """).fetch_df()
+
+def calculate_conversion_rate_per_week(conn: duckdb.connect, step:str) -> pd.DataFrame:
+    """
+    This function calculates the conversion rate per week for a given step.
+    The conversion rate is calculated as the number of users who arrived the step divided minus number of users who dropped
+    divided by the number of users who arrived the step.
+
+    Args:
+        conn (duckdb.connect): Connection to the database
+        step (str): Step in the funnel
+    
+    Returns:
+        pd.DataFrame: Dataframe with the conversion rate for the given step
+    """
+    return conn.execute(f"""
+        SELECT
+            DISTINCT ON (week)
+            count(*) FILTER (WHERE list_contains(steps, '{step}')) over (PARTITION BY year, week)  as total,
+            count(*) FILTER (WHERE steps[-1] = '{step}') over (PARTITION BY year, week) as dropped,
+            round((total::DOUBLE - dropped::DOUBLE) / total::DOUBLE * 100, 2) as conversion_rate,
+            '{step}' as step,
+            week,
+            year
+        FROM my_table
+        QUALIFY 
+            total > 0;
+        """).fetch_df()
+
+def calculate_conversion_rate_per_step_per_week(conn: duckdb.connect) -> pd.DataFrame:
+    """
+    This function calculates the conversion rate for each step and week.
+    The conversion rate is calculated as the number of users who arrived the step divided minus number of users who dropped
+    divided by the number of users who arrived the step.
+    
+    Args:
+        conn (duckdb.connect): Connection to the database
+    
+    Returns:
+        pd.DataFrame: Dataframe with the conversion rate for each step and week
+    """
+    return pd.concat(
+    conn.execute(f"""
+        SELECT
+            DISTINCT ON (week)
+            count(*) FILTER (WHERE list_contains(steps, '{i}')) over (PARTITION BY week)  as total,
+            count(*) FILTER (WHERE steps[-1] = '{i}') over (PARTITION BY week) as dropped,
+            round((total::DOUBLE - dropped::DOUBLE) / total::DOUBLE * 100, 2) as conversion_rate,
+            '{i}' as step,
+            week,
+            year
+        FROM my_table
+        QUALIFY 
+            total > 0;
+        """).fetch_df() for i in conn.execute("""
+        select distinct string_value from events_unnested where key = 'step' """).fetch_df()['string_value']
+    )
